@@ -1,6 +1,5 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Table
 from sqlalchemy.orm import relationship
-
 from .database import Base
 
 
@@ -15,13 +14,17 @@ class User(Base):
     phone_number = Column(String(length=15), unique=True)
     user_email = Column(String(length=50), unique=True)
     about_me = Column(String)
+    profile_picture = Column(String)
     login = Column(String(length=30), unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_admin = Column(Boolean, nullable=False)
-    interests = relationship("Interest", order_by="Interest.interest", back_populates="user", lazy="joined")
+    interests = relationship("Interest", order_by="interest", back_populates="user", lazy="joined")
     address = relationship("Adress", uselist=False, back_populates="user", lazy="joined")
     work_experiences = relationship("Work_Experience", order_by="desc(job_start_date)", back_populates="user",
                                     lazy="joined")
+    educations = relationship("Education", order_by="desc(edu_start_date)", back_populates="user", lazy="joined")
+    projects = relationship("Project", order_by="desc(date_start)", back_populates="user", lazy="joined")
+    socials = relationship("Social", back_populates="user", lazy="joined")
 
     def __str__(self):
         return self.first_name + " " + self.last_name
@@ -75,64 +78,87 @@ class Education(Base):
 
     __tablename__ = "Education"
 
-    edu_id = mode(primary_key=True)
-    edu_name = models.CharField(max_length=100)
-    edu_institution = models.CharField(max_length=100)
-    edu_start_date = models.CharField(max_length=100)
-    edu_end_date = models.CharField(max_length=100, null=True)
+    edu_id = Column(Integer, primary_key=True)
+    edu_name = Column(String, length=100)
+    edu_institution = Column(String, length=100)
+    edu_start_date = Column(Date)
+    edu_end_date = Column(Date)
     user_id = Column(Integer, ForeignKey("User.user_id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False)
-    user = relationship("User", back_populates="work_experiences", lazy="joined")
+    user = relationship("User", back_populates="educations", lazy="joined")
 
     def __str__(self):
         return self.edu_name + " at " + self.edu_institution
 
 
-class Project(models.Model):
-    project_id = models.AutoField(primary_key=True)
-    project_title = models.CharField(max_length=50)
-    live_link = models.URLField(null=True, blank=True)
-    github_link = models.URLField(null=True, blank=True)
-    date_start = models.CharField(max_length=100)
-    date_end = models.CharField(max_length=100, null=True)
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
+tag_project = Table('tag_project', Base.metadata,
+    Column('tag', String, ForeignKey('Tag.tag')),
+    Column('project_id', Integer, ForeignKey('Project.project_id'))
+)
+
+
+class Project(Base):
+
+    __tablename__ = "Project"
+
+    project_id = Column(Integer, primary_key=True)
+    project_title = Column(String, length=50)
+    live_link = Column(String)
+    github_link = Column(String)
+    date_start = Column(Date)
+    date_end = Column(Date)
+    user_id = Column(Integer, ForeignKey("User.user_id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False)
+    user = relationship("User", back_populates="projects", lazy="joined")
+    description = relationship("Description", uselist=False, back_populates="project", lazy="joined")
+    tags = relationship("Tag", secondary=tag_project, back_populates="projects", lazy="joined")
+    images = relationship("Image", back_populates="project", lazy="joined")
 
     def __str__(self):
         return self.project_title
 
 
-class Description(models.Model):
-    project = models.OneToOneField(
-        Project,
-        on_delete=models.CASCADE,
-        primary_key=True,
-    )
-    short = models.TextField()
-    stakeholders = models.TextField()
-    problem = models.TextField()
-    solution = models.TextField()
+class Description(Base):
+
+    __tablename__ = 'Description'
+
+    short = Column(String)
+    html = Column(String)
+    project_id = Column(Integer, ForeignKey('Project.project_id', onupdate="CASCADE", ondelete="CASCADE"),
+                        nullable=False)
+    project = relationship("Project", back_populates="description", lazy="joined")
 
 
-class Image(models.Model):
-    image = models.ImageField(upload_to='pics')
-    thumbnail = models.BooleanField()
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, null=True, blank=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
+class Tag(Base):
 
+    __tablename__ = 'Tag'
 
-class Tag(models.Model):
-    technology = models.CharField(max_length=100)
-    project = models.ManyToManyField(Project)
+    tag = Column(String, primary_key=True)
+    category = Column(String, primary_key=True)
+    projects = relationship("Project", secondary=tag_project, back_populates="tags", lazy="joined")
 
     def __str__(self):
         return self.technology
 
 
+class Image(Base):
+
+    __tablename__ = "Image"
+
+    image_name = Column(String, primary_key=True)
+    image_url = Column(String)
+    thumbnail = Column(Boolean)
+    project_id = Column(Integer, ForeignKey('Project.project_id', onupdate="CASCADE", ondelete="CASCADE"),
+                        nullable=False)
+    project = relationship("Project", back_populates="images", lazy="joined")
 
 
-class Social(models.Model):
-    social_name = models.CharField(max_length=100, primary_key=True)
-    social_link = models.URLField(null=True)
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
+class Social(Base):
+
+    __tablename__ = "Social"
+
+    social_name = Column(String, primary_key=True, length=100)
+    social_link = Column(String)
+    user_id = Column(Integer, ForeignKey("User.user_id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False)
+    user = relationship("User", back_populates="socials", lazy="joined")
 
     def __str__(self):
         return self.social_name
